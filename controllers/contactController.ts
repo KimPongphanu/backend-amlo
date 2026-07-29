@@ -131,9 +131,9 @@ export const createContact = asyncHandler(
             html: emailHtml,
           }).catch(() => {})
         }
-        console.log(
-          `[Contact] Email sent to ${supervisors.length} supervisor(s)`,
-        )
+        // console.log(
+        //   `[Contact] Email sent to ${supervisors.length} supervisor(s)`,
+        // )
       }
     } catch (emailErr) {
       console.error('[Contact] Failed to send notification email:', emailErr)

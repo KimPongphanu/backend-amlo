@@ -59,11 +59,13 @@ export const createPopup = asyncHandler(async (
 
   const sanitizedFilename = file.filename.replace(/[^a-zA-Z0-9.\-_]/g, '')
   const title = typeof req.body.title === 'string' ? req.body.title.trim() : ''
+  const bg_color = typeof req.body.bg_color === 'string' ? req.body.bg_color.trim() : '#ffffff'
 
   const popup = await prisma.splash_popups.create({
     data: {
       image_url: `/uploads/${sanitizedFilename}`,
       title,
+      bg_color,
     },
   })
 
@@ -86,10 +88,13 @@ export const updatePopup = asyncHandler(async (
     throw new AppError('ไม่พบ Popup', 404)
   }
 
-  const data: { title?: string; isActive?: boolean } = {}
+  const data: { title?: string; isActive?: boolean; bg_color?: string } = {}
 
   if (typeof req.body.title === 'string') {
     data.title = req.body.title.trim()
+  }
+  if (typeof req.body.bg_color === 'string') {
+    data.bg_color = req.body.bg_color.trim()
   }
   if (typeof req.body.isActive === 'boolean') {
     // ถ้าต้องการ activate ตัวนี้ ให้ deactivate ตัวอื่นก่อน

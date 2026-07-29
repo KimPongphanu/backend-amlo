@@ -178,6 +178,7 @@ model splash_popups {
   id        Int      @id @default(autoincrement())
   image_url String
   title     String   @default("")
+  bg_color  String   @default("#ffffff")
   isActive  Boolean  @default(false)
   createdAt DateTime @default(now())
 }

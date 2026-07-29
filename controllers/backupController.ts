@@ -32,7 +32,7 @@ const findPgBin = (): string => {
     for (const ver of versions) {
       const fullPath = path.join(base, ver, 'bin')
       if (fs.existsSync(path.join(fullPath, 'pg_dump.exe'))) {
-        console.log(`[Backup] Found PostgreSQL bin at: ${fullPath}`)
+        // console.log(`[Backup] Found PostgreSQL bin at: ${fullPath}`)
         return fullPath
       }
     }
@@ -154,7 +154,7 @@ const cleanupOldBackups = () => {
   for (const f of toDelete) {
     try {
       fs.unlinkSync(path.join(BACKUP_DIR, f.filename))
-      console.log(`[Backup] Deleted old backup: ${f.filename}`)
+      // console.log(`[Backup] Deleted old backup: ${f.filename}`)
     } catch {
       /* silent */
     }

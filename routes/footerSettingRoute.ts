@@ -2,6 +2,7 @@ import express, { Router } from 'express'
 import {
   getAllSettings,
   updateSettings,
+  retryTranslation,
 } from '../controllers/footerSettingController'
 import auth, { requireSupervisor } from '../middlewares/auth'
 import { logAudit } from '../utils/auditLogger'
@@ -27,6 +28,13 @@ router.put(
     next()
   },
   updateSettings,
+)
+
+// POST /api/settings/retry-translation — รีทรายคำแปล (admin เท่านั้น)
+router.post(
+  '/retry-translation',
+  auth,
+  retryTranslation,
 )
 
 export default router
