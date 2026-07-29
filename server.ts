@@ -122,9 +122,9 @@ cron.schedule('0 3 * * *', () => {
     },
     (err) => {
       if (err) return console.error('[Auto Backup] Failed:', err.message)
-      console.log(
-        `[Auto Backup] Created: ${filename} (${(fs.statSync(outputFile).size / 1024 / 1024).toFixed(1)} MB)`,
-      )
+      // console.log(
+      //   `[Auto Backup] Created: ${filename} (${(fs.statSync(outputFile).size / 1024 / 1024).toFixed(1)} MB)`,
+      // )
     },
   )
 })
@@ -140,9 +140,9 @@ cron.schedule('0 0 * * *', async () => {
         createdAt: { lt: cutOffDate }, // สั่งลบแถวบันทึกที่มีอายุเก่ากว่าช่วงวันที่กำหนด
       },
     })
-    console.log(
-      `[Cron Job] Expired audit logs cleaned successfully. Deleted ${result.count} rows.`,
-    )
+    // console.log(
+    //   `[Cron Job] Expired audit logs cleaned successfully. Deleted ${result.count} rows.`,
+    // )
   } catch (error) {
     console.error('[Cron Job Error] Failed to clean expired audit logs:', error)
   }
@@ -157,9 +157,9 @@ cron.schedule('0 * * * *', async () => {
       where: { createdAt: { lt: cutOff } },
     })
     if (result.count > 0) {
-      console.log(
-        `[Cron Job] Cleaned ${result.count} expired JWT blacklist entries.`,
-      )
+      // console.log(
+      //   `[Cron Job] Cleaned ${result.count} expired JWT blacklist entries.`,
+      // )
     }
   } catch (error) {
     console.error('[Cron Job Error] Failed to clean JWT blacklist:', error)

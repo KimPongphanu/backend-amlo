@@ -43,21 +43,21 @@ export const generateEmailOTP = async (email: string): Promise<void> => {
   // 🔴 LOG OTP TO CONSOLE FOR DEVELOPMENT ONLY (ห้าม log ใน Production)
   if (process.env.NODE_ENV !== 'production') {
     const separator = '='.repeat(60)
-    console.log(separator)
-    console.log(`🔐 [OTP] Email: ${email}`)
-    console.log(`🔐 [OTP] Code:  ${otp}`)
-    console.log(`🔐 [OTP] Expires at: ${expiresAt.toISOString()}`)
-    console.log(`🔐 [OTP] Valid for: 5 minutes`)
-    console.log(separator)
+    // console.log(separator)
+    // console.log(`🔐 [OTP] Email: ${email}`)
+    // console.log(`🔐 [OTP] Code:  ${otp}`)
+    // console.log(`🔐 [OTP] Expires at: ${expiresAt.toISOString()}`)
+    // console.log(`🔐 [OTP] Valid for: 5 minutes`)
+    // console.log(separator)
   }
 
   try {
     await sendOTPEmail(email, otp, 5)
-    console.log(`[OTP] Email sent successfully`)
+    // console.log(`[OTP] Email sent successfully`)
   } catch (err) {
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`[OTP] Email sending failed (SMTP not configured).`)
-      console.log(`[OTP] Use the OTP code from console above: ${otp}`)
+      // console.log(`[OTP] Email sending failed (SMTP not configured).`)
+      // console.log(`[OTP] Use the OTP code from console above: ${otp}`)
     } else {
       console.error(`[OTP] Email sending failed`)
     }
