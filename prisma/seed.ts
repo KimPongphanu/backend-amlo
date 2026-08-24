@@ -14,6 +14,21 @@ if (!connectionString) {
   process.exit(1)
 }
 
+// ── Seed credentials (must be provided via .env / environment — no hardcoded fallbacks) ──
+function requireEnv(name: string, value: string | undefined): string {
+  if (!value) {
+    console.error(`Missing required environment variable: ${name}`)
+    console.error(`Please set ${name} in your .env file, then re-run the seed.`)
+    process.exit(1)
+  }
+  return value
+}
+
+const supervisorEmail = requireEnv('SEED_SUPERVISOR_EMAIL', process.env.SEED_SUPERVISOR_EMAIL)
+const supervisorPassword = requireEnv('SEED_SUPERVISOR_PASSWORD', process.env.SEED_SUPERVISOR_PASSWORD)
+const adminEmail = requireEnv('SEED_ADMIN_EMAIL', process.env.SEED_ADMIN_EMAIL)
+const adminPassword = requireEnv('SEED_ADMIN_PASSWORD', process.env.SEED_ADMIN_PASSWORD)
+
 const pool = new Pool({ connectionString })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
@@ -34,13 +49,13 @@ async function main() {
   })
 
   if (!supervisorExists) {
-    const hashedPassword = await bcrypt.hash('***REMOVED***', 12)
+    const hashedPassword = await bcrypt.hash(supervisorPassword, 12)
 
     const recoveryKeyStrings = generateRecoveryKeys()
 
     const rootSupervisor = await prisma.user.create({
       data: {
-        email: '***REMOVED***',
+        email: supervisorEmail,
         password: hashedPassword,
         firstname: 'System',
         lastname: 'Supervisor',
@@ -66,8 +81,8 @@ async function main() {
     }
 
     console.log('Supervisor created:')
-    console.log(`  Email: ***REMOVED***`)
-    console.log(`  Password: ***REMOVED***`)
+    console.log(`  Email: ${supervisorEmail}`)
+    console.log(`  Password: ${supervisorPassword}`)
     console.log(`  Recovery Keys (SAVE THESE NOW):`)
     recoveryKeyStrings.forEach((key, idx) => {
       console.log(`    ${idx + 1}. ${key}`)
@@ -84,11 +99,11 @@ async function main() {
   })
 
   if (!adminExists) {
-    const hashedPassword = await bcrypt.hash('***REMOVED***', 12)
+    const hashedPassword = await bcrypt.hash(adminPassword, 12)
 
     await prisma.user.create({
       data: {
-        email: '***REMOVED***',
+        email: adminEmail,
         password: hashedPassword,
         firstname: 'System',
         lastname: 'Admin',
@@ -100,8 +115,8 @@ async function main() {
     })
 
     console.log('Default Admin created:')
-    console.log(`  Email: s6604062663183@email.kmutnb.ac.th`)
-    console.log(`  Password: ***REMOVED***`)
+    console.log(`  Email: ${adminEmail}`)
+    console.log(`  Password: ${adminPassword}`)
   } else {
     console.log('Admin already exists. Skipping...')
   }

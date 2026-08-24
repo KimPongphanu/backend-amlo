@@ -48,6 +48,13 @@ This is the backend REST API for the AMLO system, built with Node.js, Express, a
    JWT_SECRET="your-secure-jwt-secret-key"
    MASTER_KEY="your-master-key-for-supervisor-creation"
    
+   # Seed default credentials (required by prisma/seed.ts — `npm run seed`)
+   # No hardcoded fallbacks: the seed script exits if these are missing.
+   SEED_SUPERVISOR_EMAIL="root-supervisor@example.com"
+   SEED_SUPERVISOR_PASSWORD="change-me-strong-password"
+   SEED_ADMIN_EMAIL="default-admin@example.com"
+   SEED_ADMIN_PASSWORD="change-me-strong-password"
+   
    # SMTP Settings for OTP Emails
    SMTP_HOST="smtp.ethereal.email"
    SMTP_PORT=587

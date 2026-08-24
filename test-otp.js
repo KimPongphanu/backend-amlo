@@ -1,8 +1,17 @@
+require('dotenv').config();
 const http = require('http');
+
+const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD;
+
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+  console.error('Missing SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD in backend/.env');
+  process.exit(1);
+}
 
 async function runTest() {
   // 1. Login
-  const loginData = JSON.stringify({ email: '***REMOVED***', password: '***REMOVED***' });
+  const loginData = JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
   const loginReq = http.request({
     hostname: 'localhost',
     port: 8080,
