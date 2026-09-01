@@ -4,6 +4,7 @@ node_modules/
 *.xml
 uploads/
 /generated/prisma
+dist/
 *.txt
 
 # Docker env
