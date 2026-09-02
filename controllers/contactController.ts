@@ -3,6 +3,7 @@ import asyncHandler from 'express-async-handler'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middlewares/auth'
 import { sendEmail } from '../services/emailService'
+import { escapeHtml } from '../utils/escapeHtml'
 import { logAudit } from '../utils/auditLogger'
 import { getClientMetadata } from '../utils/ipSelector'
 
@@ -12,13 +13,15 @@ export const createContact = asyncHandler(
     const { ipAddress, userAgent } = getClientMetadata(req)
 
     // Support both camelCase (from frontend) and snake_case (from API clients)
-    const first_name = req.body.first_name || req.body.firstName
-    const last_name = req.body.last_name || req.body.lastName
-    const email = req.body.email
+    // Coerce เป็น string เสมอ — ป้องกัน type confusion จาก input ที่ไม่ใช่ string
+    const first_name = String(req.body.first_name || req.body.firstName || '')
+    const last_name = String(req.body.last_name || req.body.lastName || '')
+    const email = String(req.body.email || '')
     const tel_number = req.body.tel_number || req.body.telNumber
-    const preferred_contact =
-      req.body.preferred_contact || req.body.preferredContact
-    const message = req.body.message
+    const preferred_contact = String(
+      req.body.preferred_contact || req.body.preferredContact || '',
+    )
+    const message = String(req.body.message || '')
 
     if (!first_name || !last_name || !email || !preferred_contact || !message) {
       res.status(400).json({
@@ -27,6 +30,45 @@ export const createContact = asyncHandler(
       })
       return
     }
+
+    // ── Validation: รูปแบบอีเมลและความยาวข้อมูล (ป้องกันเมลขนาดยักษ์/ข้อมูลขยะ) ──
+    const emailTrimmed = email.trim()
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed) ||
+      emailTrimmed.length > 254
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'รูปแบบอีเมลไม่ถูกต้อง',
+      })
+      return
+    }
+
+    const maxLengthChecks: Array<[string, string, number]> = [
+      ['ชื่อ', first_name, 100],
+      ['นามสกุล', last_name, 100],
+      ['ช่องทางติดต่อ', preferred_contact, 50],
+      ['ข้อความ', message, 2000],
+    ]
+    for (const [label, value, max] of maxLengthChecks) {
+      if (value.length > max) {
+        res.status(400).json({
+          success: false,
+          message: `${label}ต้องมีความยาวไม่เกิน ${max} ตัวอักษร`,
+        })
+        return
+      }
+    }
+
+    const telNumber = tel_number ? String(tel_number).replace(/\s/g, '') : ''
+    if (telNumber.length > 20) {
+      res.status(400).json({
+        success: false,
+        message: 'เบอร์โทรศัพท์ไม่ถูกต้อง',
+      })
+      return
+    }
+
     const recentContact = await prisma.contact_requests.findFirst({
       where: {
         email: email.trim().toLowerCase(),
@@ -50,7 +92,7 @@ export const createContact = asyncHandler(
         first_name: first_name.trim(),
         last_name: last_name.trim(),
         email: email.trim().toLowerCase(),
-        tel_number: tel_number ? String(tel_number).replace(/\s/g, '') : '',
+        tel_number: telNumber,
         preferred_contact,
         message: message.trim(),
         updated_at: new Date(),
@@ -97,19 +139,19 @@ export const createContact = asyncHandler(
       <p style="color:#64748b;font-size:13px;margin:0 0 20px">มีผู้ส่งคําร้องติดต่อใหม่ผ่านเว็บไซต์ รายละเอียดดังนี้</p>
       <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0">
         <tr><td colspan="2" style="background:#f8fafc;padding:9px 16px;border-bottom:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">รายละเอียดผู้ติดต่อ</td></tr>
-        <tr><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;width:110px;font-size:13px;font-weight:600;color:#475569;background:#fafafa">ชื่อ-นามสกุล</td><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#1e293b;font-weight:500">${first_name} ${last_name}</td></tr>
-        <tr><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600;color:#475569;background:#fafafa">อีเมล</td><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#1e293b"><a href="mailto:${email}" style="color:#185FA5;text-decoration:none;font-weight:500">${email}</a></td></tr>
-        <tr><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600;color:#475569;background:#fafafa">เบอร์โทรศัพท์</td><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#1e293b">${tel_number}</td></tr>
-        <tr><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600;color:#475569;background:#fafafa">ช่องทางติดต่อ</td><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#1e293b"><span style="display:inline-block;background:#e0f2fe;color:#0369a1;font-size:11px;font-weight:600;padding:3px 12px;border-radius:20px">${preferred_contact}</span></td></tr>
+        <tr><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;width:110px;font-size:13px;font-weight:600;color:#475569;background:#fafafa">ชื่อ-นามสกุล</td><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#1e293b;font-weight:500">${escapeHtml(first_name)} ${escapeHtml(last_name)}</td></tr>
+        <tr><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600;color:#475569;background:#fafafa">อีเมล</td><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#1e293b"><a href="mailto:${encodeURIComponent(email)}" style="color:#185FA5;text-decoration:none;font-weight:500">${escapeHtml(email)}</a></td></tr>
+        <tr><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600;color:#475569;background:#fafafa">เบอร์โทรศัพท์</td><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#1e293b">${escapeHtml(telNumber)}</td></tr>
+        <tr><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600;color:#475569;background:#fafafa">ช่องทางติดต่อ</td><td style="padding:11px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#1e293b"><span style="display:inline-block;background:#e0f2fe;color:#0369a1;font-size:11px;font-weight:600;padding:3px 12px;border-radius:20px">${escapeHtml(preferred_contact)}</span></td></tr>
         <tr><td colspan="2" style="background:#f8fafc;padding:9px 16px;border-bottom:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">ข้อความ</td></tr>
-        <tr><td colspan="2" style="padding:14px 16px;font-size:13px;color:#334155;line-height:1.7;background:#fafafa;font-style:italic">"${message}"</td></tr>
+        <tr><td colspan="2" style="padding:14px 16px;font-size:13px;color:#334155;line-height:1.7;background:#fafafa;font-style:italic">"${escapeHtml(message)}"</td></tr>
       </table>
     </td>
   </tr>
   <tr>
     <td style="padding:16px 30px 0">
       <table cellpadding="0" cellspacing="0" style="width:100%;background:#f8fafc;border-radius:8px;padding:10px 14px">
-        <tr><td style="font-size:11px;color:#94a3b8"><span>${createdAt}</span><span style="margin:0 6px;color:#cbd5e1">|</span><span>IP: ${ipAddress}</span></td></tr>
+        <tr><td style="font-size:11px;color:#94a3b8"><span>${createdAt}</span><span style="margin:0 6px;color:#cbd5e1">|</span><span>IP: ${escapeHtml(ipAddress)}</span></td></tr>
       </table>
     </td>
   </tr>

@@ -1,5 +1,6 @@
 // services/emailService.ts
 import nodemailer from 'nodemailer'
+import { escapeHtml } from '../utils/escapeHtml'
 
 interface EmailOptions {
   to: string
@@ -7,10 +8,15 @@ interface EmailOptions {
   html: string
 }
 
+const smtpPort = parseInt(process.env.SMTP_PORT || '587')
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
+  port: smtpPort,
+  // Port 465 = implicit TLS, port 587 = STARTTLS
+  // requireTLS บังคับ upgrade เป็น TLS เสมอ — ป้องกัน credential ไหลผ่านช่องทางไม่เข้ารหัส
+  secure: smtpPort === 465,
+  requireTLS: true,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -18,16 +24,14 @@ const transporter = nodemailer.createTransport({
 })
 
 export const sendEmail = async (options: EmailOptions): Promise<void> => {
-  try {
-    await transporter.sendMail({
-      from: process.env.SMTP_USER,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-    })
-  } catch (error) {
-    console.error('Email sending failed:', error)
-  }
+  // ปล่อย error ออกไปให้ caller จัดการ — ห้ามกลืน error เงียบ ๆ
+  // (ผู้เรียกควร try/catch และแจ้งผู้ใช้อย่างตรงไปตรงมาเมื่อส่งอีเมลไม่สำเร็จ)
+  await transporter.sendMail({
+    from: process.env.SMTP_USER,
+    to: options.to,
+    subject: options.subject,
+    html: options.html,
+  })
 }
 
 export const sendLoginAlertEmail = async (
@@ -39,24 +43,29 @@ export const sendLoginAlertEmail = async (
 ): Promise<void> => {
   const html = `
     <h2>Security Alert: New Login Detected</h2>
-    <p>Dear ${name},</p>
+    <p>Dear ${escapeHtml(name)},</p>
     <p>A new login to your account was detected.</p>
     <h3>Login Details:</h3>
     <ul>
       <li>Time: ${timestamp.toLocaleString('th-TH')}</li>
-      <li>IP Address: ${ipAddress}</li>
-      <li>Device: ${userAgent}</li>
+      <li>IP Address: ${escapeHtml(ipAddress)}</li>
+      <li>Device: ${escapeHtml(userAgent)}</li>
     </ul>
     <p>If this was not you, please contact IT support immediately.</p>
     <hr>
     <p><small>Anti-Money Laundering Office (AMLO)</small></p>
   `
 
-  await sendEmail({
-    to: email,
-    subject: '[SECURITY] New Login to Your AMLO Account',
-    html,
-  })
+  try {
+    await sendEmail({
+      to: email,
+      subject: '[SECURITY] New Login to Your AMLO Account',
+      html,
+    })
+  } catch (error) {
+    // Alert email เป็น best-effort — ห้ามทำให้ flow หลักล้มเหลว
+    console.error('Login alert email sending failed:', error)
+  }
 }
 
 export const sendRecoveryKeyUsedAlert = async (
@@ -67,12 +76,12 @@ export const sendRecoveryKeyUsedAlert = async (
 ): Promise<void> => {
   const html = `
     <h2>Security Alert: Recovery Key Used</h2>
-    <p>Dear ${name},</p>
+    <p>Dear ${escapeHtml(name)},</p>
     <p>A recovery key was used to access your account.</p>
     <h3>Access Details:</h3>
     <ul>
-      <li>IP Address: ${ipAddress}</li>
-      <li>Device: ${userAgent}</li>
+      <li>IP Address: ${escapeHtml(ipAddress)}</li>
+      <li>Device: ${escapeHtml(userAgent)}</li>
     </ul>
     <p><strong>If you did not perform this action, your account may be compromised.</strong></p>
     <p>Please change your password immediately and check your recovery keys.</p>
@@ -80,11 +89,16 @@ export const sendRecoveryKeyUsedAlert = async (
     <p><small>Anti-Money Laundering Office (AMLO)</small></p>
   `
 
-  await sendEmail({
-    to: email,
-    subject: '[URGENT] Recovery Key Used on Your Account',
-    html,
-  })
+  try {
+    await sendEmail({
+      to: email,
+      subject: '[URGENT] Recovery Key Used on Your Account',
+      html,
+    })
+  } catch (error) {
+    // Alert email เป็น best-effort — ห้ามทำให้ flow หลักล้มเหลว
+    console.error('Recovery key alert email sending failed:', error)
+  }
 }
 
 export const sendUserActionAlert = async (
@@ -98,15 +112,15 @@ export const sendUserActionAlert = async (
   ipAddress: string,
 ): Promise<void> => {
   const html = `
-    <h2>⚠️ Admin Action Alert: ${action}</h2>
+    <h2>⚠️ Admin Action Alert: ${escapeHtml(action)}</h2>
     <p>Dear Supervisor,</p>
     <h3>Action Details:</h3>
     <ul>
-      <li><strong>Action:</strong> ${action}</li>
-      <li><strong>Performed By:</strong> ${performedBy}</li>
-      <li><strong>Target User:</strong> ${targetName} (${targetEmail})</li>
-      <li><strong>Reason:</strong> ${reason}</li>
-      <li><strong>IP Address:</strong> ${ipAddress}</li>
+      <li><strong>Action:</strong> ${escapeHtml(action)}</li>
+      <li><strong>Performed By:</strong> ${escapeHtml(performedBy)}</li>
+      <li><strong>Target User:</strong> ${escapeHtml(targetName)} (${escapeHtml(targetEmail)})</li>
+      <li><strong>Reason:</strong> ${escapeHtml(reason)}</li>
+      <li><strong>IP Address:</strong> ${escapeHtml(ipAddress)}</li>
       <li><strong>Time:</strong> ${new Date().toLocaleString('th-TH')}</li>
     </ul>
     <p>If you did not authorize this action, please:</p>
@@ -119,11 +133,16 @@ export const sendUserActionAlert = async (
     <p><small>Anti-Money Laundering Office (AMLO)</small></p>
   `
 
-  await sendEmail({
-    to: adminEmail,
-    subject: `[ACTION REQUIRED] ${action} Performed on Admin Account`,
-    html,
-  })
+  try {
+    await sendEmail({
+      to: adminEmail,
+      subject: `[ACTION REQUIRED] ${action} Performed on Admin Account`,
+      html,
+    })
+  } catch (error) {
+    // Alert email เป็น best-effort — ห้ามทำให้ flow หลักล้มเหลว
+    console.error('User action alert email sending failed:', error)
+  }
 }
 
 export const sendOTPEmail = async (

@@ -25,8 +25,9 @@ export const verifyTOTP = (token: string, secret: string): boolean => {
   })
 }
 
-export const generateEmailOTP = async (email: string): Promise<void> => {
-  const otp = Math.floor(100000 + Math.random() * 900000).toString()
+export const generateEmailOTP = async (email: string): Promise<boolean> => {
+  // ใช้ CSPRNG — Math.random() ไม่ปลอดภัยพอสำหรับ security token
+  const otp = crypto.randomInt(100000, 1000000).toString()
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
 
   const hashedOtp = await bcrypt.hash(otp, 12)
@@ -54,13 +55,14 @@ export const generateEmailOTP = async (email: string): Promise<void> => {
   try {
     await sendOTPEmail(email, otp, 5)
     // console.log(`[OTP] Email sent successfully`)
+    return true
   } catch (err) {
     if (process.env.NODE_ENV !== 'production') {
       // console.log(`[OTP] Email sending failed (SMTP not configured).`)
-      // console.log(`[OTP] Use the OTP code from console above: ${otp}`)
     } else {
       console.error(`[OTP] Email sending failed`)
     }
+    return false
   }
 }
 

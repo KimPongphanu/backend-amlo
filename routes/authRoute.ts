@@ -24,7 +24,12 @@ import {
 } from '../controllers/forceResetController'
 import { resetPassword } from '../controllers/passwordResetController'
 import auth, { requireSupervisor } from '../middlewares/auth'
-import { loginLimiter, registerLimiter } from '../middlewares/rateLimiter'
+import {
+  loginLimiter,
+  otpLimiter,
+  registerLimiter,
+  verifyLimiter,
+} from '../middlewares/rateLimiter'
 
 const router = Router()
 
@@ -98,8 +103,9 @@ router.post('/check-email', loginLimiter, checkEmail)
 /**
  * @ROUTE   POST /api/auth/reset-password
  * @DESC    Reset password using OTP or reset token
+ * @NOTE    verifyLimiter ป้องกัน brute force OTP
  */
-router.post('/reset-password', resetPassword)
+router.post('/reset-password', verifyLimiter, resetPassword)
 
 /**
  * @ROUTE   POST /api/auth/emergency-action
@@ -153,20 +159,20 @@ router.post(
  * @DESC    Send OTP to user email for force reset (called on mount)
  * @ACCESS  Authenticated
  */
-router.post('/force-reset/send-otp', auth, sendForceResetOTP)
+router.post('/force-reset/send-otp', auth, otpLimiter, sendForceResetOTP)
 
 /**
  * @ROUTE   POST /api/auth/force-reset/resend-otp
  * @DESC    Resend OTP (invalidates old one)
  * @ACCESS  Authenticated
  */
-router.post('/force-reset/resend-otp', auth, resendForceResetOTP)
+router.post('/force-reset/resend-otp', auth, otpLimiter, resendForceResetOTP)
 
 /**
  * @ROUTE   POST /api/auth/force-reset/verify
  * @DESC    Verify OTP + set new password, clears forcePasswordReset flag
  * @ACCESS  Authenticated
  */
-router.post('/force-reset/verify', auth, verifyForceResetOTP)
+router.post('/force-reset/verify', auth, verifyLimiter, verifyForceResetOTP)
 
 export default router

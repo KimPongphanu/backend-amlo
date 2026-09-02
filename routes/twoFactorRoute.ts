@@ -12,6 +12,7 @@ import {
   verifyEmailOTPForLogin,
 } from '../controllers/twoFactorController'
 import authMiddleware from '../middlewares/auth'
+import { otpLimiter, verifyLimiter } from '../middlewares/rateLimiter'
 
 const router = Router()
 
@@ -21,10 +22,11 @@ router.post('/disable', authMiddleware, disable2FA)
 router.get('/recovery-keys', authMiddleware, getRecoveryKeys)
 router.post('/recovery-keys/regenerate', authMiddleware, regenerateRecoveryKeys)
 
-router.post('/otp/request', requestEmailOTP)
-router.post('/otp/verify', verifyEmailOTPForLogin)
+// otpLimiter = ป้องกัน email bombing, verifyLimiter = ป้องกัน brute force OTP/recovery key
+router.post('/otp/request', otpLimiter, requestEmailOTP)
+router.post('/otp/verify', verifyLimiter, verifyEmailOTPForLogin)
 
-router.post('/verify-login', verify2FALogin)
-router.post('/recovery/use', useRecoveryKey)
+router.post('/verify-login', verifyLimiter, verify2FALogin)
+router.post('/recovery/use', verifyLimiter, useRecoveryKey)
 
 export default router

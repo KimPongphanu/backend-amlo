@@ -183,11 +183,16 @@ export const resetPassword = asyncHandler(
       <p><small>Anti-Money Laundering Office (AMLO)</small></p>
     `
 
-    await sendEmail({
-      to: user.email,
-      subject: '[SECURITY] Your Password Has Been Reset',
-      html,
-    })
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: '[SECURITY] Your Password Has Been Reset',
+        html,
+      })
+    } catch (emailErr) {
+      // รหัสผ่านถูกรีเซ็ตสำเร็จแล้ว — อีเมลแจ้งเตือนส่งไม่ได้ไม่ควรทำให้ request ล้ม
+      console.error('[PasswordReset] Notification email failed:', emailErr)
+    }
 
     res.status(200).json({
       success: true,

@@ -1,5 +1,6 @@
 // controllers/forceResetController.ts
 import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
 import { Response } from 'express'
 import asyncHandler from 'express-async-handler'
 import prisma from '../lib/prisma'
@@ -11,10 +12,10 @@ import { getClientMetadata } from '../utils/ipSelector'
 const OTP_EXPIRE_MINUTES = 5
 
 /**
- * Generate a random 6-digit OTP
+ * Generate a random 6-digit OTP (CSPRNG)
  */
 const generateOTP = (): string => {
-  return Math.floor(100000 + Math.random() * 900000).toString()
+  return crypto.randomInt(100000, 1000000).toString()
 }
 
 /**
@@ -59,7 +60,16 @@ export const forceResetUserPassword = asyncHandler(
       },
     })
 
-    await sendOTPEmail(user.email, otp, OTP_EXPIRE_MINUTES)
+    try {
+      await sendOTPEmail(user.email, otp, OTP_EXPIRE_MINUTES)
+    } catch (emailErr) {
+      console.error('[ForceReset] OTP email sending failed:', emailErr)
+      res.status(502).json({
+        success: false,
+        message: 'ส่งอีเมลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+      })
+      return
+    }
 
     // Set forcePasswordReset flag on the user
     await prisma.user.update({
@@ -133,7 +143,16 @@ export const sendForceResetOTP = asyncHandler(
       },
     })
 
-    await sendOTPEmail(user.email, otp, OTP_EXPIRE_MINUTES)
+    try {
+      await sendOTPEmail(user.email, otp, OTP_EXPIRE_MINUTES)
+    } catch (emailErr) {
+      console.error('[ForceReset] OTP email sending failed:', emailErr)
+      res.status(502).json({
+        success: false,
+        message: 'ส่งอีเมลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+      })
+      return
+    }
 
     res.status(200).json({
       success: true,
@@ -183,7 +202,16 @@ export const resendForceResetOTP = asyncHandler(
       },
     })
 
-    await sendOTPEmail(user.email, otp, OTP_EXPIRE_MINUTES)
+    try {
+      await sendOTPEmail(user.email, otp, OTP_EXPIRE_MINUTES)
+    } catch (emailErr) {
+      console.error('[ForceReset] OTP email sending failed:', emailErr)
+      res.status(502).json({
+        success: false,
+        message: 'ส่งอีเมลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+      })
+      return
+    }
 
     res.status(200).json({
       success: true,

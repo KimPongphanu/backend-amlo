@@ -277,7 +277,16 @@ export const requestEmailOTP = asyncHandler(
       return
     }
 
-    await generateEmailOTP(email.toLowerCase())
+    const sent = await generateEmailOTP(email.toLowerCase())
+
+    if (!sent) {
+      // ส่งอีเมลไม่สำเร็จ — แจ้งผู้ใช้อย่างตรงไปตรงมา (OTP เก่าจะถูก invalidate เมื่อขอใหม่)
+      res.status(502).json({
+        success: false,
+        message: 'ส่งอีเมลไม่สำเร็จ กรุณาลองใหม่อีกครั้งในภายหลัง',
+      })
+      return
+    }
 
     res.status(200).json({
       success: true,

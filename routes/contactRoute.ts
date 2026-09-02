@@ -5,6 +5,7 @@ import {
   updateContactStatus,
 } from '../controllers/contactController'
 import auth from '../middlewares/auth'
+import { contactLimiter } from '../middlewares/rateLimiter'
 
 const router = Router()
 
@@ -12,7 +13,7 @@ const router = Router()
  * @ROUTE   POST /api/contact
  * @DESC    บันทึกข้อความการติดต่อจากประชาชนหน้าเว็บไซต์ (Public)
  */
-router.post('/', createContact)
+router.post('/', contactLimiter, createContact)
 
 /**
  * @ROUTE   GET /api/contact

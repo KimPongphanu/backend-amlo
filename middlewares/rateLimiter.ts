@@ -2,12 +2,11 @@
 import { Request, Response } from 'express'
 import rateLimit from 'express-rate-limit'
 
-// Custom key generator: use userId if logged in, fallback to IP
+// Custom key generator: use userId if logged in, fallback to req.ip
+// ⚠️ ห้ามอ่าน header X-Forwarded-For โดยตรง — attacker ปลอม header นี้ได้
+//    `req.ip` ปลอดภัยกว่า เพราะ Express คำนวณจาก trusted proxy chain ให้แล้ว (trust proxy = 1)
 const keyGenerator = (req: Request): string => {
-  const forwarded = req.headers['x-forwarded-for']
-  const ip =
-    typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : req.ip
-  return (req as any).user?.uuid || ip || 'unknown'
+  return (req as any).user?.uuid || req.ip || 'unknown'
 }
 
 // ── Login Limiter ────────────────────────────────────────────
@@ -78,6 +77,48 @@ export const commentRateLimiter = rateLimit({
   message: {
     success: false,
     message: 'คุณส่งความคิดเห็นบ่อยเกินไป กรุณารอ 30 นาที แล้วลองใหม่อีกครั้ง',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// ── OTP Send Limiter (ป้องกัน email bombing / SMTP quota exhaustion) ──
+export const otpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  keyGenerator,
+  validate: false,
+  message: {
+    success: false,
+    message: 'คุณขอรหัส OTP บ่อยเกินไป กรุณารอ 1 ชั่วโมงแล้วลองใหม่อีกครั้ง',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// ── OTP Verify Limiter (ป้องกัน brute force OTP / recovery key) ──
+export const verifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyGenerator,
+  validate: false,
+  message: {
+    success: false,
+    message: 'คุณยืนยันข้อมูลผิดบ่อยเกินไป กรุณารอ 15 นาทีแล้วลองใหม่อีกครั้ง',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// ── Contact Form Limiter (ป้องกันสแปมเมลหา Supervisor) ───────
+export const contactLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  keyGenerator,
+  validate: false,
+  message: {
+    success: false,
+    message: 'คุณส่งข้อความติดต่อบ่อยเกินไป กรุณารอ 1 ชั่วโมงแล้วลองใหม่อีกครั้ง',
   },
   standardHeaders: true,
   legacyHeaders: false,
