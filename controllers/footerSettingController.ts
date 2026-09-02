@@ -85,14 +85,14 @@ export const retryTranslation = asyncHandler(async (
 ): Promise<void> => {
   const allSettings = await prisma.site_settings.findMany()
   const contentKeys = allSettings.filter(
-    (s) => s.key.startsWith('content_') && !s.key.startsWith('content_en_')
+    (s: { key: string; value: string }) => s.key.startsWith('content_') && !s.key.startsWith('content_en_')
   )
   
   let retriedCount = 0;
   
   for (const th of contentKeys) {
     const enKey = th.key.replace('content_', 'content_en_')
-    const enSetting = allSettings.find(s => s.key === enKey)
+    const enSetting = allSettings.find((s: { key: string; value: string }) => s.key === enKey)
     
     // If English translation is missing, empty, or exactly the same as Thai (failed translation fallback)
     if (!enSetting || !enSetting.value || enSetting.value.trim() === '' || enSetting.value === th.value) {
