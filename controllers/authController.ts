@@ -10,6 +10,7 @@ import {
   step2ConfirmWithReason,
   isConfirmed,
 } from '../middlewares/confirmAction'
+import { generateCsrfToken, setCsrfCookie } from '../middlewares/csrf'
 import {
   checkSessionLimit,
   createSession,
@@ -259,11 +260,15 @@ export const loginUser = asyncHandler(async (req: Request, res: Response) => {
       path: '/',
     })
 
+    // 🌟 CSRF double-submit token — frontend อ่านจาก cookie ไปใส่ header X-CSRF-Token
+    const csrfToken = setCsrfCookie(res, generateCsrfToken())
+
     res.status(200).json({
       success: true,
       requires2FA: true,
       twoFactorMethod: user.twoFactorMethod,
       message: 'กรุณายืนยันตัวตนด้วย 2FA',
+      csrfToken,
       user: {
         uuid: user.uuid,
         email: user.email,
@@ -308,12 +313,16 @@ export const loginUser = asyncHandler(async (req: Request, res: Response) => {
     path: '/', // Ensure cookie is available for all paths
   })
 
+  // 🌟 CSRF double-submit token — frontend อ่านจาก cookie ไปใส่ header X-CSRF-Token
+  const csrfToken = setCsrfCookie(res, generateCsrfToken())
+
   await logAudit(req, 'LOGIN_SUCCESS', 'User logged in successfully.', user.id)
 
   res.status(200).json({
     message: 'Login successful.',
     success: true,
     requires2FA: false,
+    csrfToken,
     user: {
       uuid: user.uuid,
       email: user.email,
@@ -366,6 +375,9 @@ export const logoutUser = asyncHandler(
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
     })
+
+    // 🌟 เคลียร์ CSRF cookie คู่กันด้วย
+    res.clearCookie('csrf_token')
 
     res.status(200).json({ success: true, message: 'Logged out successfully.' })
   },

@@ -9,6 +9,7 @@ import { globalErrorHandler } from './middlewares/errorHandler'
 import helmet from 'helmet'
 import { setCharset } from './middlewares/setCharset'
 import prisma from './lib/prisma' // 🌟 นำเข้า prisma client เพื่อสั่งคำสั่งลบข้อมูลโดยตรง
+import { csrfProtection } from './middlewares/csrf'
 import { apiLimiter } from './middlewares/rateLimiter'
 import { cleanupExpiredSessions } from './middlewares/session'
 import adminRoutes from './routes/adminRoute'
@@ -59,6 +60,9 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
 app.use(setCharset)
+// 🌟 CSRF double-submit — ตรวจ cookie csrf_token คู่ header X-CSRF-Token ในทุก mutation
+// (public pre-auth endpoints ที่ไม่มี csrf cookie ถูกยกเว้นในไฟล์ middlewares/csrf.ts)
+app.use(csrfProtection)
 
 // 🌟 อ่าน origin จาก env (คั่นด้วย comma) — fallback เป็น dev origins
 const ALLOWED_ORIGINS: string[] = (
@@ -89,7 +93,13 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Accept'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Cookie',
+      'Accept',
+      'X-CSRF-Token',
+    ],
   }),
 )
 

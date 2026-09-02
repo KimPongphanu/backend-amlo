@@ -4,6 +4,7 @@ import asyncHandler from 'express-async-handler'
 import speakeasy from 'speakeasy'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middlewares/auth'
+import { generateCsrfToken, setCsrfCookie } from '../middlewares/csrf'
 import { checkSessionLimit, createSession } from '../middlewares/session'
 import { sendLoginAlertEmail } from '../services/emailService'
 import {
@@ -414,6 +415,9 @@ export const verify2FALogin = asyncHandler(
 
     res.clearCookie('temp_2fa_token')
 
+    // 🌟 rotate CSRF token ใหม่พร้อม session จริง (double-submit pattern)
+    const csrfToken = setCsrfCookie(res, generateCsrfToken())
+
     await sendLoginAlertEmail(
       user.email,
       `${user.firstname} ${user.lastname}`,
@@ -432,6 +436,7 @@ export const verify2FALogin = asyncHandler(
     res.status(200).json({
       success: true,
       message: 'Login successful',
+      csrfToken,
       user: {
         uuid: user.uuid,
         email: user.email,
