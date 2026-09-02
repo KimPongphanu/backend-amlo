@@ -6,9 +6,11 @@ import express, { Express, Request, Response } from 'express'
 import cron from 'node-cron' // 🌟 นำเข้า node-cron เข้ามาจัดการรอบเวลาทำงานเบื้องหลัง
 import path from 'path'
 import { globalErrorHandler } from './middlewares/errorHandler'
+import helmet from 'helmet'
 import { setCharset } from './middlewares/setCharset'
 import prisma from './lib/prisma' // 🌟 นำเข้า prisma client เพื่อสั่งคำสั่งลบข้อมูลโดยตรง
 import { apiLimiter } from './middlewares/rateLimiter'
+import { cleanupExpiredSessions } from './middlewares/session'
 import adminRoutes from './routes/adminRoute'
 import auditRoutes from './routes/auditRoute'
 import authRoutes from './routes/authRoute'
@@ -29,6 +31,28 @@ import uploadRoutes from './routes/uploadRoute'
 const app: Express = express()
 const port: number = 8080
 
+// 🌟 Security headers (helmet) — CSP จัดการที่ Nginx/frontend layer
+// CORP เปิด cross-origin เพื่อให้ /uploads ใช้งานข้าม origin ได้
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }),
+)
+
+// 🌟 ป้องกันการรัน production ด้วย JWT_SECRET ที่อ่อนแอหรือค่า default
+if (
+  process.env.NODE_ENV === 'production' &&
+  (!process.env.JWT_SECRET ||
+    process.env.JWT_SECRET.length < 32 ||
+    /dev-jwt-secret|change-me|for-testing/i.test(process.env.JWT_SECRET))
+) {
+  console.error(
+    '[FATAL] JWT_SECRET missing or too weak for production. Generate with: openssl rand -base64 48',
+  )
+  process.exit(1)
+}
+
 // ── 1. ประกาศตั้งค่าพื้นฐานของระบบและ CORS ก่อนเริ่มแมป Route ──
 app.set('trust proxy', 1) // trust first proxy (Nginx, Cloudflare, etc.)
 app.use(express.json())
@@ -36,25 +60,28 @@ app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
 app.use(setCharset)
 
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://10.89.163.40:5173',
-  'http://localhost',
-  'http://127.0.0.1',
-] // ตัวอย่าง
+// 🌟 อ่าน origin จาก env (คั่นด้วย comma) — fallback เป็น dev origins
+const ALLOWED_ORIGINS: string[] = (
+  process.env.ALLOWED_ORIGINS ||
+  'http://localhost:5173,http://127.0.0.1:5173,http://10.89.163.40:5173,http://localhost,http://127.0.0.1'
+)
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean)
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      const allowedOrigins = [
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-        'http://10.89.163.40:5173',
-        'http://localhost',
-        'http://127.0.0.1',
-      ]
-      if (!origin || allowedOrigins.includes(origin)) {
+      // 🌟 ไม่มี Origin header (curl/server-to-server) — อนุญาตเฉพาะ non-production
+      if (!origin) {
+        if (process.env.NODE_ENV !== 'production') {
+          callback(null, true)
+        } else {
+          callback(new Error('Not allowed by CORS'))
+        }
+        return
+      }
+      if (ALLOWED_ORIGINS.includes(origin)) {
         callback(null, true)
       } else {
         callback(new Error('Not allowed by CORS'))
@@ -98,13 +125,12 @@ app.get('/', (req: Request, res: Response) => {
 
 app.use(globalErrorHandler)
 
-// ── 4. Auto Backup — 03:00 daily ──
-import { exec } from 'child_process'
+// ── 4. Auto Backup — 03:00 daily (execFile ไม่ผ่าน shell = กัน command injection) ──
+import { execFile } from 'child_process'
 cron.schedule('0 3 * * *', () => {
   const fs = require('fs') as typeof import('fs')
   const p = require('path') as typeof import('path')
 
-  const pgDump = 'pg_dump'
   const date = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const filename = `backup_${date}.sql`
   const backupDir = '/app/backups'
@@ -112,12 +138,21 @@ cron.schedule('0 3 * * *', () => {
   const outputFile = p.join(backupDir, filename)
 
   const url = new URL(process.env.DATABASE_URL!)
-  const cmd = `${pgDump} --host=${url.hostname} --port=${url.port || '5432'} --username=${decodeURIComponent(url.username)} --dbname=${url.pathname.slice(1)} --file="${outputFile}" --format=plain --no-owner`
+  const args = [
+    `--host=${url.hostname}`,
+    `--port=${url.port || '5432'}`,
+    `--username=${decodeURIComponent(url.username)}`,
+    `--dbname=${url.pathname.slice(1)}`,
+    `--file=${outputFile}`,
+    '--format=plain',
+    '--no-owner',
+  ]
 
-  exec(
-    cmd,
+  execFile(
+    'pg_dump',
+    args,
     {
-      env: { PGPASSWORD: decodeURIComponent(url.password) },
+      env: { ...process.env, PGPASSWORD: decodeURIComponent(url.password) },
       timeout: 5 * 60 * 1000,
     },
     (err) => {
@@ -163,6 +198,15 @@ cron.schedule('0 * * * *', async () => {
     }
   } catch (error) {
     console.error('[Cron Job Error] Failed to clean JWT blacklist:', error)
+  }
+})
+
+// ── 7. ลบ Session ที่หมดอายุแล้ว (รายวัน) ──
+cron.schedule('30 3 * * *', async () => {
+  try {
+    await cleanupExpiredSessions()
+  } catch (error) {
+    console.error('[Cron Job Error] Failed to cleanup expired sessions:', error)
   }
 })
 

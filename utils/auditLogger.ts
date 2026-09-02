@@ -5,7 +5,8 @@ import { getClientMetadata } from './ipSelector'
 
 const GEO_CACHE = new Map<string, { region: string; cachedAt: number }>()
 const GEO_CACHE_TTL = 24 * 60 * 60 * 1000 // Cache GeoIP 24 ชม.
-const GEO_API_URL = 'http://ip-api.com/json'
+// 🌟 ใช้ provider ที่รองรับ HTTPS (ip-api.com ฟรีรองรับเฉพาะ HTTP — ไม่ปลอดภัยพอ)
+const GEO_API_URL = 'https://freeipapi.com/api/json'
 
 const lookupGeoRegion = async (ip: string): Promise<string | null> => {
   // ถ้าเป็น private/local IP ไม่ต้อง query Geo
@@ -28,18 +29,17 @@ const lookupGeoRegion = async (ip: string): Promise<string | null> => {
   }
 
   try {
-    const res = await fetch(
-      `${GEO_API_URL}/${ip}?fields=country,regionName,city`,
-      { signal: AbortSignal.timeout(3000) },
-    )
+    const res = await fetch(`${GEO_API_URL}/${ip}`, {
+      signal: AbortSignal.timeout(3000),
+    })
     if (!res.ok) return null
     const data = (await res.json()) as {
-      country: string
-      regionName: string
-      city: string
+      countryName?: string
+      regionName?: string
+      cityName?: string
     }
-    if (data.country) {
-      const region = `${data.country}, ${data.regionName}, ${data.city}`
+    if (data.countryName) {
+      const region = `${data.countryName}, ${data.regionName || '-'}, ${data.cityName || '-'}`
       GEO_CACHE.set(ip, { region, cachedAt: Date.now() })
       return region
     }

@@ -4,6 +4,7 @@ import asyncHandler from 'express-async-handler'
 import speakeasy from 'speakeasy'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middlewares/auth'
+import { checkSessionLimit, createSession } from '../middlewares/session'
 import { sendLoginAlertEmail } from '../services/emailService'
 import {
   disableTOTPForUser,
@@ -42,7 +43,7 @@ interface VerifyOTPBody {
   tempToken?: string
 }
 
-export const SALT_ROUNDS = 10
+export const SALT_ROUNDS = 12
 
 export const setup2FA = asyncHandler(
   async (req: AuthRequest, res: Response) => {
@@ -383,6 +384,24 @@ export const verify2FALogin = asyncHandler(
       },
       secret,
       { expiresIn: user.role === 'SUPERVISOR' ? '4h' : '12h' },
+    )
+
+    // 🌟 Enforce session limits (Supervisor = 1 session, Admin = 3)
+    const { allowed, maxSessions } = await checkSessionLimit(user.id, user.role)
+    if (!allowed) {
+      res.status(429).json({
+        message: `บัญชีนี้มีการใช้งานถึงจำนวน session สูงสุด (${maxSessions}) แล้ว กรุณาออกจากระบบเครื่องอื่นก่อน`,
+      })
+      return
+    }
+
+    // 🌟 สร้าง session record (ใช้ตรวจ inactivity / revoke / force logout ให้ได้จริง)
+    await createSession(
+      user.id,
+      finalToken,
+      ipAddress,
+      userAgent,
+      user.role === 'SUPERVISOR' ? 4 : 12,
     )
 
     res.cookie('token', finalToken, {

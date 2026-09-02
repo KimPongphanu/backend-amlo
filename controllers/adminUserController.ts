@@ -8,6 +8,7 @@ import {
   step1RequestConfirmation,
   step2ConfirmWithReason,
   step3ExecuteWithDelay,
+  isConfirmed,
 } from '../middlewares/confirmAction'
 import { revokeAllUserSessions } from '../middlewares/session'
 import { sendUserActionAlert } from '../services/emailService'
@@ -292,16 +293,17 @@ export const updateAdmin = asyncHandler(
 // @access  Super Admin
 export const adminBan = asyncHandler(async (req: Request, res: Response) => {
   const { step } = req.body
+  const targetId = String(req.params.id || req.params.uuid || 'unknown')
 
   switch (step) {
     case 1:
-      await step1RequestConfirmation(req, res)
+      await step1RequestConfirmation(req, res, 'ADMIN_BAN', targetId)
       break
     case 2:
-      await step2ConfirmWithReason(req, res)
+      await step2ConfirmWithReason(req, res, 'ADMIN_BAN', targetId)
       break
     case 3:
-      await step3ExecuteWithDelay(req, res)
+      await step3ExecuteWithDelay(req, res, 'ADMIN_BAN', targetId)
       break
     default:
       res.status(400).json({
@@ -316,16 +318,17 @@ export const adminBan = asyncHandler(async (req: Request, res: Response) => {
 // @access  Super Admin
 export const adminUnban = asyncHandler(async (req: Request, res: Response) => {
   const { step } = req.body
+  const targetId = String(req.params.id || req.params.uuid || 'unknown')
 
   switch (step) {
     case 1:
-      await step1RequestConfirmation(req, res)
+      await step1RequestConfirmation(req, res, 'ADMIN_UNBAN', targetId)
       break
     case 2:
-      await step2ConfirmWithReason(req, res)
+      await step2ConfirmWithReason(req, res, 'ADMIN_UNBAN', targetId)
       break
     case 3:
-      await step3ExecuteWithDelay(req, res)
+      await step3ExecuteWithDelay(req, res, 'ADMIN_UNBAN', targetId)
       break
     default:
       res.status(400).json({
@@ -340,16 +343,17 @@ export const adminUnban = asyncHandler(async (req: Request, res: Response) => {
 // @access  Super Admin
 export const adminDelete = asyncHandler(async (req: Request, res: Response) => {
   const { step } = req.body
+  const targetId = String(req.params.id || req.params.uuid || 'unknown')
 
   switch (step) {
     case 1:
-      await step1RequestConfirmation(req, res)
+      await step1RequestConfirmation(req, res, 'ADMIN_DELETE', targetId)
       break
     case 2:
-      await step2ConfirmWithReason(req, res)
+      await step2ConfirmWithReason(req, res, 'ADMIN_DELETE', targetId)
       break
     case 3:
-      await step3ExecuteWithDelay(req, res)
+      await step3ExecuteWithDelay(req, res, 'ADMIN_DELETE', targetId)
       break
     default:
       res.status(400).json({
@@ -363,17 +367,26 @@ export const banAdmin = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { step } = req.body
     const { ipAddress, userAgent } = getClientMetadata(req)
+    const uuid = String(req.params.uuid)
 
     switch (step) {
       case 1:
-        await step1RequestConfirmation(req, res)
+        await step1RequestConfirmation(req, res, 'BAN_ADMIN', uuid)
         break
       case 2:
-        await step2ConfirmWithReason(req, res)
+        await step2ConfirmWithReason(req, res, 'BAN_ADMIN', uuid)
         break
       case 3: {
-        const { uuid } = req.params
         const { reason } = req.body as BanAdminBody
+
+        // 🌟 ต้องผ่าน step 1 + 2 จริงก่อน
+        if (!isConfirmed(req, 'BAN_ADMIN', uuid)) {
+          res.status(403).json({
+            success: false,
+            message: 'ยังไม่ได้ยืนยันการทำรายการ (ต้องผ่าน step 1 และ 2 ก่อน)',
+          })
+          return
+        }
 
         if (!reason || reason.trim().length === 0) {
           res
@@ -446,17 +459,26 @@ export const unbanAdmin = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { step } = req.body
     const { ipAddress, userAgent } = getClientMetadata(req)
+    const uuid = String(req.params.uuid)
 
     switch (step) {
       case 1:
-        await step1RequestConfirmation(req, res)
+        await step1RequestConfirmation(req, res, 'UNBAN_ADMIN', uuid)
         break
       case 2:
-        await step2ConfirmWithReason(req, res)
+        await step2ConfirmWithReason(req, res, 'UNBAN_ADMIN', uuid)
         break
       case 3: {
-        const { uuid } = req.params
         const { reason } = req.body as BanAdminBody
+
+        // 🌟 ต้องผ่าน step 1 + 2 จริงก่อน
+        if (!isConfirmed(req, 'UNBAN_ADMIN', uuid)) {
+          res.status(403).json({
+            success: false,
+            message: 'ยังไม่ได้ยืนยันการทำรายการ (ต้องผ่าน step 1 และ 2 ก่อน)',
+          })
+          return
+        }
 
         if (!reason || reason.trim().length === 0) {
           res
@@ -527,17 +549,26 @@ export const deleteAdmin = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { step } = req.body
     const { ipAddress, userAgent } = getClientMetadata(req)
+    const uuid = String(req.params.uuid)
 
     switch (step) {
       case 1:
-        await step1RequestConfirmation(req, res)
+        await step1RequestConfirmation(req, res, 'DELETE_ADMIN', uuid)
         break
       case 2:
-        await step2ConfirmWithReason(req, res)
+        await step2ConfirmWithReason(req, res, 'DELETE_ADMIN', uuid)
         break
       case 3: {
-        const { uuid } = req.params
         const { reason } = req.body as BanAdminBody
+
+        // 🌟 ต้องผ่าน step 1 + 2 จริงก่อน
+        if (!isConfirmed(req, 'DELETE_ADMIN', uuid)) {
+          res.status(403).json({
+            success: false,
+            message: 'ยังไม่ได้ยืนยันการทำรายการ (ต้องผ่าน step 1 และ 2 ก่อน)',
+          })
+          return
+        }
 
         if (!reason || reason.trim().length === 0) {
           res

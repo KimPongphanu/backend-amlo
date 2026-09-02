@@ -8,8 +8,14 @@ import { AuthRequest } from '../middlewares/auth'
 import {
   step1RequestConfirmation,
   step2ConfirmWithReason,
+  isConfirmed,
 } from '../middlewares/confirmAction'
-import { revokeAllUserSessions } from '../middlewares/session'
+import {
+  checkSessionLimit,
+  createSession,
+  hashToken,
+  revokeAllUserSessions,
+} from '../middlewares/session'
 import { sendUserActionAlert } from '../services/emailService'
 import { logAudit } from '../utils/auditLogger'
 import { getClientMetadata } from '../utils/ipSelector'
@@ -282,6 +288,18 @@ export const loginUser = asyncHandler(async (req: Request, res: Response) => {
     { expiresIn: '1d' },
   )
 
+  // 🌟 Enforce session limits (Supervisor = 1 session, Admin = 3)
+  const { allowed, maxSessions } = await checkSessionLimit(user.id, user.role)
+  if (!allowed) {
+    res.status(429).json({
+      message: `บัญชีนี้มีการใช้งานถึงจำนวน session สูงสุด (${maxSessions}) แล้ว กรุณาออกจากระบบเครื่องอื่นก่อน`,
+    })
+    return
+  }
+
+  // 🌟 สร้าง session record — ใช้ตรวจ inactivity / revoke / force logout ให้ได้จริง
+  await createSession(user.id, token, ipAddress, userAgent, 24)
+
   res.cookie('token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -315,12 +333,22 @@ export const logoutUser = asyncHandler(
 
     if (token) {
       try {
-        await prisma.jwtBlacklist.create({ data: { token } })
+        // 🌟 เก็บเป็น SHA-256 hash — ห้ามเก็บ JWT ดิบลง DB (กัน token หลุดจาก DB)
+        await prisma.jwtBlacklist.create({
+          data: { token: hashToken(token) },
+        })
       } catch (err: any) {
         if (err.code !== 'P2002') {
           throw err
         }
       }
+    }
+
+    // 🌟 ลบ session ปัจจุบันด้วย — ไม่งั้นนับเป็น active session ค้างจนหมดอายุ
+    if (req.session?.id) {
+      await prisma.session
+        .delete({ where: { id: req.session.id } })
+        .catch(() => {})
     }
 
     const user = await prisma.user.findUnique({
@@ -415,17 +443,26 @@ export const getUsers = asyncHandler(
 export const banUser = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { step } = req.body
   const { ipAddress, userAgent } = getClientMetadata(req)
+  const uuid = String(req.params.uuid)
 
   switch (step) {
     case 1:
-      await step1RequestConfirmation(req, res)
+      await step1RequestConfirmation(req, res, 'BAN_USER', uuid)
       break
     case 2:
-      await step2ConfirmWithReason(req, res)
+      await step2ConfirmWithReason(req, res, 'BAN_USER', uuid)
       break
     case 3: {
-      const { uuid } = req.params
       const { reason } = req.body
+
+      // 🌟 ต้องผ่าน step 1 + 2 จริงก่อน (token ต้องตรงกับ user+action+target นี้)
+      if (!isConfirmed(req, 'BAN_USER', uuid)) {
+        res.status(403).json({
+          success: false,
+          message: 'ยังไม่ได้ยืนยันการทำรายการ (ต้องผ่าน step 1 และ 2 ก่อน)',
+        })
+        return
+      }
 
       if (!reason || reason.trim().length === 0) {
         res
@@ -503,17 +540,26 @@ export const unbanUser = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { step } = req.body
     const { ipAddress, userAgent } = getClientMetadata(req)
+    const uuid = String(req.params.uuid)
 
     switch (step) {
       case 1:
-        await step1RequestConfirmation(req, res)
+        await step1RequestConfirmation(req, res, 'UNBAN_USER', uuid)
         break
       case 2:
-        await step2ConfirmWithReason(req, res)
+        await step2ConfirmWithReason(req, res, 'UNBAN_USER', uuid)
         break
       case 3: {
-        const { uuid } = req.params
         const { reason } = req.body
+
+        // 🌟 ต้องผ่าน step 1 + 2 จริงก่อน
+        if (!isConfirmed(req, 'UNBAN_USER', uuid)) {
+          res.status(403).json({
+            success: false,
+            message: 'ยังไม่ได้ยืนยันการทำรายการ (ต้องผ่าน step 1 และ 2 ก่อน)',
+          })
+          return
+        }
 
         if (!reason || reason.trim().length === 0) {
           res
@@ -585,17 +631,26 @@ export const deleteUser = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { step } = req.body
     const { ipAddress, userAgent } = getClientMetadata(req)
+    const uuid = String(req.params.uuid)
 
     switch (step) {
       case 1:
-        await step1RequestConfirmation(req, res)
+        await step1RequestConfirmation(req, res, 'DELETE_USER', uuid)
         break
       case 2:
-        await step2ConfirmWithReason(req, res)
+        await step2ConfirmWithReason(req, res, 'DELETE_USER', uuid)
         break
       case 3: {
-        const { uuid } = req.params
         const { reason } = req.body
+
+        // 🌟 ต้องผ่าน step 1 + 2 จริงก่อน
+        if (!isConfirmed(req, 'DELETE_USER', uuid)) {
+          res.status(403).json({
+            success: false,
+            message: 'ยังไม่ได้ยืนยันการทำรายการ (ต้องผ่าน step 1 และ 2 ก่อน)',
+          })
+          return
+        }
 
         if (!reason || reason.trim().length === 0) {
           res

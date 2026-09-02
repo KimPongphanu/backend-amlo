@@ -71,16 +71,10 @@ export const createComment = asyncHandler(
   },
 )
 
+// 🌟 Public — แสดงเฉพาะคอมเมนต์ที่อนุมัติแล้วเสมอ (ส่ง ?all=true มาก็ไม่มีผล)
 export const getComments = asyncHandler(async (req: Request, res: Response) => {
-  const { all } = req.query
-  const whereCondition: any = {}
-
-  if (all !== 'true') {
-    whereCondition.isShow = true
-  }
-
   const comments = await prisma.comment_items.findMany({
-    where: whereCondition,
+    where: { isShow: true },
     orderBy: {
       createdAt: 'desc',
     },
@@ -91,6 +85,20 @@ export const getComments = asyncHandler(async (req: Request, res: Response) => {
     data: comments,
   })
 })
+
+// 🌟 Admin/Supervisor only (GET /api/comments/all) — ดูทุกคอมเมนต์รวมที่ถูกซ่อน
+export const getAllComments = asyncHandler(
+  async (req: Request, res: Response) => {
+    const comments = await prisma.comment_items.findMany({
+      orderBy: { createdAt: 'desc' },
+    })
+
+    res.status(200).json({
+      success: true,
+      data: comments,
+    })
+  },
+)
 
 export const updateComment = asyncHandler(
   async (req: Request, res: Response) => {

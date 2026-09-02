@@ -9,3 +9,15 @@ dist/
 
 # Docker env
 .env.docker
+
+# 🌟 Security: ห้าม commit ไฟล์ที่มี credential / recovery key
+AMLO Recovery Keys.pdf
+*.key
+backups/
+
+# OS / junk files
+.DS_Store
+**/.DS_Store
+
+# Local test scripts (อ่าน credential จาก .env)
+test-otp.js

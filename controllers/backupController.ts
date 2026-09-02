@@ -1,5 +1,5 @@
 // controllers/backupController.ts
-import { exec } from 'child_process'
+import { execFile } from 'child_process'
 import { Response } from 'express'
 import asyncHandler from 'express-async-handler'
 import fs from 'fs'
@@ -42,8 +42,8 @@ const findPgBin = (): string => {
 }
 
 const PG_BIN = findPgBin()
-const cmd = (tool: string) =>
-  PG_BIN ? `"${path.join(PG_BIN, `${tool}.exe`)}"` : tool
+// 🌟 คืน path แบบไม่ใส่ quote — ใช้กับ execFile (ไม่ผ่าน shell) ซึ่งจัดการ space เองได้
+const cmd = (tool: string) => (PG_BIN ? path.join(PG_BIN, `${tool}.exe`) : tool)
 
 interface BackupFile {
   filename: string
@@ -73,10 +73,23 @@ const parseDbUrl = () => {
 const runPgDump = (outputFile: string): Promise<void> => {
   return new Promise((resolve, reject) => {
     const db = parseDbUrl()
-    const dumpCmd = `${cmd('pg_dump')} --host=${db.host} --port=${db.port} --username=${db.user} --dbname=${db.dbname} --file="${outputFile}" --format=plain --no-owner`
-    exec(
-      dumpCmd,
-      { env: { PGPASSWORD: db.password }, timeout: 5 * 60 * 1000 },
+    const args = [
+      `--host=${db.host}`,
+      `--port=${db.port}`,
+      `--username=${db.user}`,
+      `--dbname=${db.dbname}`,
+      `--file=${outputFile}`,
+      '--format=plain',
+      '--no-owner',
+    ]
+    // 🌟 execFile ไม่ผ่าน shell = กัน command injection
+    execFile(
+      cmd('pg_dump'),
+      args,
+      {
+        env: { ...process.env, PGPASSWORD: db.password },
+        timeout: 5 * 60 * 1000,
+      },
       (err) => {
         if (err) reject(err)
         else resolve()
@@ -92,13 +105,27 @@ const runPgRestore = (inputFile: string): Promise<void> => {
   return new Promise((resolve, reject) => {
     const db = parseDbUrl()
     // Drop existing connections and recreate database
-    const dropCmd = `${cmd('psql')} --host=${db.host} --port=${db.port} --username=${db.user} --dbname=postgres -c "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '${db.dbname}' AND pid <> pg_backend_pid();"`
-    const restoreCmd = `${cmd('psql')} --host=${db.host} --port=${db.port} --username=${db.user} --dbname=${db.dbname} --file="${inputFile}"`
+    const terminateSql = `SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '${db.dbname}' AND pid <> pg_backend_pid();`
+    const dropArgs = [
+      `--host=${db.host}`,
+      `--port=${db.port}`,
+      `--username=${db.user}`,
+      '--dbname=postgres',
+      '-c',
+      terminateSql,
+    ]
+    const restoreArgs = [
+      `--host=${db.host}`,
+      `--port=${db.port}`,
+      `--username=${db.user}`,
+      `--dbname=${db.dbname}`,
+      `--file=${inputFile}`,
+    ]
 
-    const env = { PGPASSWORD: db.password }
+    const env = { ...process.env, PGPASSWORD: db.password }
 
-    // First terminate connections, then restore
-    exec(dropCmd, { env, timeout: 30 * 1000 }, (dropErr) => {
+    // First terminate connections, then restore (🌟 execFile — ไม่ผ่าน shell)
+    execFile(cmd('psql'), dropArgs, { env, timeout: 30 * 1000 }, (dropErr) => {
       if (dropErr) {
         // If drop fails, try restore anyway
         console.warn(
@@ -106,10 +133,15 @@ const runPgRestore = (inputFile: string): Promise<void> => {
           dropErr.message,
         )
       }
-      exec(restoreCmd, { env, timeout: 10 * 60 * 1000 }, (restoreErr) => {
-        if (restoreErr) reject(restoreErr)
-        else resolve()
-      })
+      execFile(
+        cmd('psql'),
+        restoreArgs,
+        { env, timeout: 10 * 60 * 1000 },
+        (restoreErr) => {
+          if (restoreErr) reject(restoreErr)
+          else resolve()
+        },
+      )
     })
   })
 }

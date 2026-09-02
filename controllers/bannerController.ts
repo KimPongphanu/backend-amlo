@@ -6,17 +6,30 @@ import path from 'path'
 import prisma from '../lib/prisma'
 import { AppError } from '../utils/AppError'
 
-// GET /api/banners — ดึงรายการ banners ทั้งหมด (เฉพาะ isShow = true สำหรับ public)
+// 🌟 GET /api/banners — Public: แสดงเฉพาะ isShow = true เสมอ (ส่ง ?all=true มาก็ไม่มีผล)
 export const getAllBanners = asyncHandler(async (
   req: Request,
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
-  const { all } = req.query
-  const where = all === 'true' ? {} : { isShow: true }
-
   const banners = await prisma.banners.findMany({
-    where,
+    where: { isShow: true },
+    orderBy: { order: 'asc' },
+  })
+
+  res.status(200).json({
+    success: true,
+    data: banners,
+  })
+})
+
+// 🌟 GET /api/banners/all — Admin/Supervisor only: ดูทุก banner รวมที่ถูกซ่อน
+export const getAllBannersAdmin = asyncHandler(async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  const banners = await prisma.banners.findMany({
     orderBy: { order: 'asc' },
   })
 

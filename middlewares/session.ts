@@ -9,7 +9,7 @@ const ADMIN_MAX_SESSIONS = 3
 const SESSION_INACTIVITY_MS = 30 * 60 * 1000
 const SUPERVISOR_INACTIVITY_MS = 15 * 60 * 1000
 
-const hashToken = (token: string): string => {
+export const hashToken = (token: string): string => {
   return crypto.createHash('sha256').update(token).digest('hex')
 }
 
@@ -58,7 +58,12 @@ export const validateAndUpdateSession = async (
     })
 
     if (!session) {
-      next()
+      // 🌟 JWT ถูกต้องแต่ไม่มี session record = token จากก่อน deploy หรือถูก revoke
+      //    → บังคับเข้าสู่ระบบใหม่ (ทำให้ Force Logout / single-session บังคับได้จริง)
+      res.clearCookie('token')
+      res.status(401).json({
+        message: 'Session หมดอายุหรือถูกเพิกถอน กรุณาเข้าสู่ระบบใหม่',
+      })
       return
     }
 

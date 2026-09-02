@@ -50,9 +50,9 @@ export const authMiddleware = async (
       role: string
     }
 
-    // 🌟 ตรวจสอบ JWT Blacklist (token ที่ถูก logout แล้ว)
+    // 🌟 ตรวจสอบ JWT Blacklist (token ที่ถูก logout แล้ว — เก็บในรูป SHA-256 hash)
     const isBlacklisted = await prisma.jwtBlacklist.findUnique({
-      where: { token },
+      where: { token: hashToken(token) },
     })
     if (isBlacklisted) {
       res.clearCookie('token')

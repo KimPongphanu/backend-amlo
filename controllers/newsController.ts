@@ -66,14 +66,44 @@ export const getNews = asyncHandler(async (req: Request, res: Response) => {
   const page = parseInt(String(req.query.page)) || 1
   const limit = parseInt(String(req.query.limit)) || 10
   const type = String(req.query.type)
-  const isAll = req.query.all === 'true'
+  const skip = (page - 1) * limit
+
+  // 🌟 Public — แสดงเฉพาะ isShow = true เสมอ (admin ใช้ GET /api/news/all)
+  const whereCondition: any = { isShow: true }
+
+  if (type === 'PR' || type === 'NEWS') {
+    whereCondition.type = type
+  }
+
+  const [newsList, totalItems] = await prisma.$transaction([
+    prisma.news.findMany({
+      where: whereCondition,
+      orderBy: { date: 'desc' },
+      skip: skip,
+      take: limit,
+    }),
+    prisma.news.count({ where: whereCondition }),
+  ])
+
+  res.status(200).json({
+    success: true,
+    data: newsList,
+    pagination: {
+      totalItems,
+      currentPage: page,
+      totalPages: Math.ceil(totalItems / limit),
+    },
+  })
+})
+
+// 🌟 GET /api/news/all — Admin/Supervisor only: ดูทุกข่าวรวมที่ถูกซ่อน (isShow = false)
+export const getAllNews = asyncHandler(async (req: Request, res: Response) => {
+  const page = parseInt(String(req.query.page)) || 1
+  const limit = parseInt(String(req.query.limit)) || 10
+  const type = String(req.query.type)
   const skip = (page - 1) * limit
 
   const whereCondition: any = {}
-  
-  if (!isAll) {
-    whereCondition.isShow = true
-  }
 
   if (type === 'PR' || type === 'NEWS') {
     whereCondition.type = type

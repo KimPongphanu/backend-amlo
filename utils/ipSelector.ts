@@ -8,17 +8,12 @@ export interface ClientMetadata {
 }
 
 export const getClientMetadata = (req: Request): ClientMetadata => {
-  // ดักจับ IP จริงจาก Header หากระบบรันหลัง Nginx, Cloudflare, Vercel หรือ Render
-  const forwardedFor = req.headers['x-forwarded-for']
-  const forwardedList: string[] = Array.isArray(forwardedFor)
-    ? forwardedFor
-    : (forwardedFor?.split(',') || []).map((s) => s.trim())
-
   return {
-    // Public IP: ตัวแรกใน x-forwarded-for (IP จริงของผู้ใช้)
-    ipAddress: forwardedList[0] || req.ip || '0.0.0.0',
-    // Private IP: req.ip (IP ที่ Express server เห็น, เช่น 172.x.x.x ใน Docker)
-    serverIp: req.ip || '0.0.0.0',
+    // 🌟 ใช้ req.ip เท่านั้น — Express คำนวณจาก trusted proxy chain ให้แล้ว
+    //    (ห้ามอ่าน X-Forwarded-For เอง เพราะ attacker ปลอม header นี้ได้)
+    ipAddress: req.ip || '0.0.0.0',
+    // Private IP: socket address ที่ Express เห็นจริง (เช่น 172.x.x.x ใน Docker network)
+    serverIp: req.socket?.remoteAddress || req.ip || '0.0.0.0',
     // User Agent
     userAgent: (req.headers['user-agent'] as string) || 'Unknown Device',
   }

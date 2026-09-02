@@ -3,11 +3,12 @@ import {
   createBanner,
   deleteBanner,
   getAllBanners,
+  getAllBannersAdmin,
   reorderBanners,
   toggleBannerVisibility,
   updateBanner,
 } from '../controllers/bannerController'
-import auth from '../middlewares/auth'
+import auth, { requireAdmin } from '../middlewares/auth'
 import { uploadLimiter } from '../middlewares/rateLimiter'
 import upload from '../middlewares/upload'
 import { logAudit } from '../utils/auditLogger'
@@ -23,7 +24,10 @@ const audit =
     next()
   }
 
-// GET /api/banners — สาธารณะ (default: only isShow=true, ใช้ ?all=true สำหรับ admin)
+// GET /api/banners/all — 🌟 Admin/Supervisor only (ดูรวมที่ซ่อน) — ต้องอยู่บน /:id routes
+router.get('/all', auth, requireAdmin, getAllBannersAdmin)
+
+// GET /api/banners — สาธารณะ (เฉพาะ isShow=true เสมอ)
 router.get('/', getAllBanners)
 
 // POST /api/banners — ต้องล็อกอิน + rate limit + audit
